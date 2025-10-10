@@ -15,18 +15,46 @@ app.use(express.json({ limit: '1mb' }));
 /* ---------------- health (CORSより前に置く) ---------------- */
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-/* ---------------- CORS 設定（プリフライト対応込み） ---------------- */
+/* ---------------- 許可ドメインの正規化 ---------------- */
 const ALLOWED = (process.env.ALLOWED_ORIGIN || 'http://localhost:5500')
   .split(',')
   .map(s => s.trim().replace(/\/+$/,'').toLowerCase()) // 末尾 / を除去
   .filter(Boolean);
 
 const ALLOW_NULL_ORIGIN = process.env.NODE_ENV !== 'production';
+console.log('✅ Allowed origins:', ALLOWED.join(', ') || '(none)');
+console.log('   Allow null origin (dev only):', ALLOW_NULL_ORIGIN);
 
+/* ---------------- preflight short-circuit ----------------
+ * ブラウザの OPTIONS（プリフライト）を先に自前で処理し、
+ * 必ず Access-Control-Allow-Origin を返す。
+ * ------------------------------------------------------- */
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'OPTIONS') return next();
+
+  const raw = req.headers.origin || '';
+  const origin = String(raw).replace(/\/+$/,'').toLowerCase();
+  if (!origin) return res.status(400).end(); // 本番想定ではOrigin必須
+
+  if (ALLOWED.includes(origin) || (ALLOW_NULL_ORIGIN && raw === undefined)) {
+    // そのまま返す（大文字小文字そのまま）
+    if (raw) res.set('Access-Control-Allow-Origin', raw);
+    res.set('Vary', 'Origin');
+    res.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(204).end();
+  }
+  return res.status(403).end();
+});
+
+/* ---------------- CORS（/api に適用） ---------------- */
 const corsOptions = {
   origin: (origin, cb) => {
-    if (origin === null && ALLOW_NULL_ORIGIN) return cb(null, true); // devのみ null 許可
-    if (!origin) return cb(new Error('CORS: missing origin'));       // 本番は Origin 必須
+    // dev: null origin 許可（file:// 等）
+    if (origin === null && ALLOW_NULL_ORIGIN) return cb(null, true);
+
+    // 本番: Origin 必須
+    if (!origin) return cb(new Error('CORS: missing origin'));
 
     const norm = origin.replace(/\/+$/,'').toLowerCase();
     if (ALLOWED.includes(norm)) return cb(null, true);
@@ -38,20 +66,17 @@ const corsOptions = {
   allowedHeaders: ['Content-Type','Authorization'],
   optionsSuccessStatus: 204,
 };
-
-// /api 配下に CORS を適用し、OPTIONS(プリフライト)も必ず許可応答
 app.use('/api', cors(corsOptions));
+// 念のため：ミドルウェア版のOPTIONSも許可
 app.options('/api/*', cors(corsOptions));
-
-console.log('✅ Allowed origins:', ALLOWED.join(', '));
-console.log('   Allow null origin (dev only):', ALLOW_NULL_ORIGIN);
 
 /* ---------------- rate limit ---------------- */
 app.use('/api/', rateLimit({ windowMs: 60_000, max: 30 }));
 
+/* ---------------- API keys ---------------- */
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
-  console.warn('⚠️  OPENAI_API_KEY is not set. Set it in server env.');
+  console.warn('⚠️  OPENAI_API_KEY is not set. Set it in Render Web Service env.');
 }
 
 /* ---------------- summarize ---------------- */
@@ -90,6 +115,7 @@ app.post('/api/summarize', async (req, res) => {
     const bodyText = await r.text();
 
     if (r.status === 429) {
+      console.warn('[summarize] 429 rate-limited');
       return res.json({
         topics: 'casual',
         sentiment: 'neutral',
@@ -104,6 +130,7 @@ app.post('/api/summarize', async (req, res) => {
 
     const data = JSON.parse(bodyText);
     const content = data.choices?.[0]?.message?.content || '';
+
     const topics = /Topics:\s*(.*)/i.exec(content)?.[1]?.trim() || 'casual';
     const sentiment = /Sentiment:\s*(.*)/i.exec(content)?.[1]?.trim() || 'neutral';
     const hint = /Style hint:\s*(.*)/i.exec(content)?.[1]?.trim() || 'neutral casual';
@@ -209,6 +236,6 @@ app.post('/api/chat', async (req, res) => {
 const PORT = Number(process.env.PORT || 8787);
 app.listen(PORT, () => {
   console.log(`✅ API listening on http://localhost:${PORT}`);
-  console.log(`   Allowed origins: ${ALLOWED.join(', ')}`);
+  console.log(`   Allowed origins: ${ALLOWED.join(', ') || '(none)'}`);
   console.log(`   Allow null origin (dev only): ${ALLOW_NULL_ORIGIN}`);
 });
