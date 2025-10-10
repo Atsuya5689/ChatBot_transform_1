@@ -15,26 +15,18 @@ app.use(express.json({ limit: '1mb' }));
 /* ---------------- health (CORSより前に置く) ---------------- */
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-/* ---------------- CORS 設定 ----------------
- * - 本番: Origin ヘッダ必須。ALLOWED_ORIGIN に一致したものだけ許可
- * - dev  : null origin(file://等) も許可
- * - 比較時は末尾スラを除去し小文字化
- * - CORS は /api にのみ適用
- */
+/* ---------------- CORS 設定（プリフライト対応込み） ---------------- */
 const ALLOWED = (process.env.ALLOWED_ORIGIN || 'http://localhost:5500')
   .split(',')
-  .map(s => s.trim().replace(/\/+$/,'').toLowerCase())
+  .map(s => s.trim().replace(/\/+$/,'').toLowerCase()) // 末尾 / を除去
   .filter(Boolean);
 
 const ALLOW_NULL_ORIGIN = process.env.NODE_ENV !== 'production';
 
-app.use('/api', cors({
+const corsOptions = {
   origin: (origin, cb) => {
-    // dev: null origin 許可
-    if (origin === null && ALLOW_NULL_ORIGIN) return cb(null, true);
-
-    // 本番: Origin 必須
-    if (!origin) return cb(new Error('CORS: missing origin'));
+    if (origin === null && ALLOW_NULL_ORIGIN) return cb(null, true); // devのみ null 許可
+    if (!origin) return cb(new Error('CORS: missing origin'));       // 本番は Origin 必須
 
     const norm = origin.replace(/\/+$/,'').toLowerCase();
     if (ALLOWED.includes(norm)) return cb(null, true);
@@ -42,14 +34,24 @@ app.use('/api', cors({
     return cb(new Error('Not allowed by CORS: ' + origin));
   },
   credentials: false,
-}));
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+  optionsSuccessStatus: 204,
+};
+
+// /api 配下に CORS を適用し、OPTIONS(プリフライト)も必ず許可応答
+app.use('/api', cors(corsOptions));
+app.options('/api/*', cors(corsOptions));
+
+console.log('✅ Allowed origins:', ALLOWED.join(', '));
+console.log('   Allow null origin (dev only):', ALLOW_NULL_ORIGIN);
 
 /* ---------------- rate limit ---------------- */
 app.use('/api/', rateLimit({ windowMs: 60_000, max: 30 }));
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
-  console.warn('⚠️  OPENAI_API_KEY is not set. Set it in server env (Render dashboard).');
+  console.warn('⚠️  OPENAI_API_KEY is not set. Set it in server env.');
 }
 
 /* ---------------- summarize ---------------- */
@@ -88,7 +90,6 @@ app.post('/api/summarize', async (req, res) => {
     const bodyText = await r.text();
 
     if (r.status === 429) {
-      console.warn('[summarize] 429 rate-limited');
       return res.json({
         topics: 'casual',
         sentiment: 'neutral',
@@ -96,7 +97,6 @@ app.post('/api/summarize', async (req, res) => {
         raw: 'fallback:429',
       });
     }
-
     if (!r.ok) {
       console.error('[summarize] OpenAI error:', bodyText);
       return res.status(r.status).json({ error: 'openai_error', detail: bodyText });
@@ -104,7 +104,6 @@ app.post('/api/summarize', async (req, res) => {
 
     const data = JSON.parse(bodyText);
     const content = data.choices?.[0]?.message?.content || '';
-
     const topics = /Topics:\s*(.*)/i.exec(content)?.[1]?.trim() || 'casual';
     const sentiment = /Sentiment:\s*(.*)/i.exec(content)?.[1]?.trim() || 'neutral';
     const hint = /Style hint:\s*(.*)/i.exec(content)?.[1]?.trim() || 'neutral casual';
@@ -129,11 +128,7 @@ app.post('/api/generate-avatar', async (req, res) => {
       `Change ONLY clothing/accessories to: ${hint}.\n` +
       `Clean flat style, centered, high-contrast, no text.`;
 
-    const payload = {
-      model: 'gpt-image-1',
-      prompt,
-      size: '1024x1024',
-    };
+    const payload = { model: 'gpt-image-1', prompt, size: '1024x1024' };
 
     const r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
@@ -151,14 +146,9 @@ app.post('/api/generate-avatar', async (req, res) => {
       return res.status(r.status).json({ error: 'openai_error', detail: bodyText });
     }
 
-    let data;
-    try { data = JSON.parse(bodyText); } catch { data = {}; }
-
+    let data; try { data = JSON.parse(bodyText); } catch { data = {}; }
     const b64 = data?.data?.[0]?.b64_json;
-    if (!b64) {
-      console.error('[generate-avatar] no b64_json in response:', data);
-      return res.status(502).json({ error: 'no_image' });
-    }
+    if (!b64) return res.status(502).json({ error: 'no_image' });
 
     res.json({ dataUrl: `data:image/png;base64,${b64}` });
   } catch (e) {
@@ -167,7 +157,7 @@ app.post('/api/generate-avatar', async (req, res) => {
   }
 });
 
-/* ---------------- chat (casual 60-char reply) ---------------- */
+/* ---------------- chat (60文字以内の雑談) ---------------- */
 app.post('/api/chat', async (req, res) => {
   try {
     const msgs = (req.body?.messages || [])
@@ -177,7 +167,7 @@ app.post('/api/chat', async (req, res) => {
     const payload = {
       model: 'gpt-4o-mini',
       temperature: 0.8,
-      max_tokens: 80, // 日本語60文字目安
+      max_tokens: 80,
       messages: [
         {
           role: 'system',
@@ -194,18 +184,12 @@ app.post('/api/chat', async (req, res) => {
 
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_API_KEY}` },
       body: JSON.stringify(payload),
     });
 
     const bodyText = await r.text();
-
-    if (r.status === 429) {
-      return res.json({ reply: 'ちょっと待って、今混み合ってるみたい。' });
-    }
+    if (r.status === 429) return res.json({ reply: 'ちょっと待って、今混み合ってるみたい。' });
     if (!r.ok) {
       console.error('[chat] OpenAI error:', bodyText);
       return res.status(r.status).json({ error: 'openai_error', detail: bodyText });
@@ -214,7 +198,6 @@ app.post('/api/chat', async (req, res) => {
     const data = JSON.parse(bodyText);
     let reply = data.choices?.[0]?.message?.content?.trim() || 'うん、わかったよ。';
     if (reply.length > 60) reply = reply.slice(0, 60);
-
     res.json({ reply });
   } catch (e) {
     console.error('[chat] server error:', e);
