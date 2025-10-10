@@ -219,6 +219,7 @@
       (location.hostname.endsWith('onrender.com') || location.protocol === 'https:')
         ? PROD_API
         : 'http://localhost:8787/api';
+    console.log('[API_BASE]', API_BASE)
     const el = (id)=>document.getElementById(id);
 
     // ===== State =====
@@ -541,4 +542,5 @@
   </script>
 </body>
 </html>
+
 
