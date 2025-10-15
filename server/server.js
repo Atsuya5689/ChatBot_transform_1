@@ -1,7 +1,7 @@
 // server/server.js
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
+// import cors from 'cors'; // ←手動CORSに切り替えたので未使用
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import fetch from 'node-fetch';
@@ -15,60 +15,45 @@ app.use(express.json({ limit: '1mb' }));
 /* ---------------- health (CORSより前に置く) ---------------- */
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-/* ---------------- 許可ドメインの正規化 ---------------- */
+/* ---------------- CORS（手動・確実版） ----------------
+ * - ALLOWED_ORIGIN（カンマ区切り）とOriginを厳密一致で比較（末尾/は無視）
+ * - /api への OPTIONS は必ず204 + 必要ヘッダを返す
+ * - 本リクエストでも許可Originなら必ず ACAO を付与
+ * - 資格情報は使わない（Access-Control-Allow-Credentials 未付与）
+ * --------------------------------------------------- */
 const ALLOWED = (process.env.ALLOWED_ORIGIN || 'http://localhost:5500')
   .split(',')
-  .map(s => s.trim().replace(/\/+$/,'').toLowerCase()) // 末尾 / を除去
+  .map(s => s.trim().replace(/\/+$/,'').toLowerCase())
   .filter(Boolean);
 
-const ALLOW_NULL_ORIGIN = process.env.NODE_ENV !== 'production';
-console.log('✅ Allowed origins:', ALLOWED.join(', ') || '(none)');
-console.log('   Allow null origin (dev only):', ALLOW_NULL_ORIGIN);
+console.log(' Allowed origins:', ALLOWED.join(', ') || '(none)');
 
-/* ---------------- preflight short-circuit ----------------
- * ブラウザの OPTIONS（プリフライト）を先に自前で処理し、
- * 必ず Access-Control-Allow-Origin を返す。
- * ------------------------------------------------------- */
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'OPTIONS') return next();
+  const raw = req.headers.origin || '';                 // 例: https://chatbot-transform-1.onrender.com
+  const norm = raw.replace(/\/+$/,'').toLowerCase();
+  const isAllowed = !!raw && ALLOWED.includes(norm);
 
-  const raw = req.headers.origin || '';
-  const origin = String(raw).replace(/\/+$/,'').toLowerCase();
-  if (!origin) return res.status(400).end(); // 本番想定ではOrigin必須
-
-  if (ALLOWED.includes(origin) || (ALLOW_NULL_ORIGIN && raw === undefined)) {
-    // そのまま返す（大文字小文字そのまま）
-    if (raw) res.set('Access-Control-Allow-Origin', raw);
-    res.set('Vary', 'Origin');
-    res.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    return res.status(204).end();
+  // Preflight (OPTIONS)
+  if (req.method === 'OPTIONS') {
+    if (isAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', raw); // そのまま返す（大文字小文字も維持）
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      // res.setHeader('Access-Control-Max-Age', '600'); // 任意: プリフライト結果のキャッシュ
+      return res.status(204).end();
+    }
+    // 許可外のOriginのプリフライトは即NG
+    return res.status(403).end();
   }
-  return res.status(403).end();
+
+  // 本リクエスト（GET/POSTなど）
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', raw);
+    res.setHeader('Vary', 'Origin');
+  }
+  return next();
 });
-
-/* ---------------- CORS（/api に適用） ---------------- */
-const corsOptions = {
-  origin: (origin, cb) => {
-    // dev: null origin 許可（file:// 等）
-    if (origin === null && ALLOW_NULL_ORIGIN) return cb(null, true);
-
-    // 本番: Origin 必須
-    if (!origin) return cb(new Error('CORS: missing origin'));
-
-    const norm = origin.replace(/\/+$/,'').toLowerCase();
-    if (ALLOWED.includes(norm)) return cb(null, true);
-
-    return cb(new Error('Not allowed by CORS: ' + origin));
-  },
-  credentials: false,
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
-  optionsSuccessStatus: 204,
-};
-app.use('/api', cors(corsOptions));
-// 念のため：ミドルウェア版のOPTIONSも許可
-app.options('/api/*', cors(corsOptions));
 
 /* ---------------- rate limit ---------------- */
 app.use('/api/', rateLimit({ windowMs: 60_000, max: 30 }));
@@ -76,7 +61,7 @@ app.use('/api/', rateLimit({ windowMs: 60_000, max: 30 }));
 /* ---------------- API keys ---------------- */
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
-  console.warn('⚠️  OPENAI_API_KEY is not set. Set it in Render Web Service env.');
+  console.warn('  OPENAI_API_KEY is not set. Set it in Render Web Service env.');
 }
 
 /* ---------------- summarize ---------------- */
@@ -235,7 +220,6 @@ app.post('/api/chat', async (req, res) => {
 /* ---------------- start ---------------- */
 const PORT = Number(process.env.PORT || 8787);
 app.listen(PORT, () => {
-  console.log(`✅ API listening on http://localhost:${PORT}`);
+  console.log(` API listening on http://localhost:${PORT}`);
   console.log(`   Allowed origins: ${ALLOWED.join(', ') || '(none)'}`);
-  console.log(`   Allow null origin (dev only): ${ALLOW_NULL_ORIGIN}`);
 });
