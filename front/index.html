@@ -280,7 +280,7 @@
     async function chatWithServer(messages){
       const r = await fetch(`${API_BASE}/chat`, {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{'Content-Type':'text/plain'},
         body: JSON.stringify({ messages })
       });
       if(!r.ok) throw new Error(await r.text());
@@ -290,7 +290,7 @@
     async function summarizeWithServer(last10Messages){
       const r = await fetch(`${API_BASE}/summarize`, {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{'Content-Type':'text/plain'},
         body: JSON.stringify({ messages: last10Messages })
       });
       if(!r.ok) throw new Error(await r.text());
@@ -302,7 +302,7 @@
       try {
         const r = await fetch(`${API_BASE}/generate-avatar`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({ hint })
         });
         if (!r.ok) throw new Error(await r.text());
@@ -542,5 +542,6 @@
   </script>
 </body>
 </html>
+
 
 
