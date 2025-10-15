@@ -6,102 +6,37 @@
   <title>Context-Aware Avatar (Minimal UI)</title>
   <style>
     :root{
-      /* Pastel Blue Theme Tokens */
-      --bg:#f6f9ff;           /* ふわっと明るい背景 */
-      --card:#ffffff;         /* パネルは白カード */
-      --muted:#7b8794;        /* やさしいグレー */
-      --accent:#8ecae6;       /* パステルブルー */
-      --accent-deep:#5fb3d7;  /* hover/強調用 */
-      --line:#e6eef8;         /* うすい境界線 */
-      --ink:#1f2a37;          /* 文字色 */
-      --bubble-user:#dbeeff;  /* ユーザー吹き出し */
-      --bubble-bot:#eef5ff;   /* ボット吹き出し */
-      --input:#ffffff;        /* 入力系背景 */
-      --chip-ink:#0b0f12;
+      --bg:#f6f9ff; --card:#ffffff; --muted:#7b8794; --accent:#8ecae6; --accent-deep:#5fb3d7;
+      --line:#e6eef8; --ink:#1f2a37; --bubble-user:#dbeeff; --bubble-bot:#eef5ff; --input:#ffffff; --chip-ink:#0b0f12;
     }
-
     *{box-sizing:border-box}
-    body{
-      margin:0;background:var(--bg);color:var(--ink);
-      font:14px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
-    }
-
-    header{
-      padding:14px 18px;border-bottom:1px solid var(--line);
-      background:#f0f7ff; display:flex;gap:12px;align-items:center
-    }
+    body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    header{padding:14px 18px;border-bottom:1px solid var(--line);background:#f0f7ff; display:flex;gap:12px;align-items:center}
     header h1{font-size:16px;margin:0;font-weight:700;color:var(--ink)}
-    header .pill{
-      font-size:12px;color:var(--chip-ink);
-      background:var(--accent);padding:2px 8px;border-radius:999px
-    }
-
+    header .pill{font-size:12px;color:var(--chip-ink);background:var(--accent);padding:2px 8px;border-radius:999px}
     main{display:grid;grid-template-columns:300px 1fr;gap:14px;padding:14px}
-
-    .card{
-      background:var(--card);
-      border:1px solid var(--line);
-      border-radius:12px;
-      box-shadow:0 6px 18px rgba(30,64,175,.06);
-    }
-
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 18px rgba(30,64,175,.06);}
     .section{padding:12px}
-    .title{
-      font-size:12px;color:var(--muted);
-      text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px
-    }
-
-    #avatar{
-      width:100%;aspect-ratio:1;display:block;border-radius:10px;
-      background:#f3f8ff;border:1px dashed #b8d8f0;object-fit:cover
-    }
-
-    #ctx{
-      height:120px;width:100%;resize:vertical;
-      background:var(--input);color:var(--ink);
-      border:1px solid var(--line);border-radius:8px;padding:8px
-    }
-
+    .title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+    #avatar{width:100%;aspect-ratio:1;display:block;border-radius:10px;background:#f3f8ff;border:1px dashed #b8d8f0;object-fit:cover}
+    #ctx{height:120px;width:100%;resize:vertical;background:var(--input);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
     #chat{height:360px;overflow:auto;padding:12px}
-
-    .bubble{
-      max-width:78%;padding:8px 10px;border-radius:12px;margin:6px 0;white-space:pre-wrap;
-      border:1px solid var(--line)
-    }
+    .bubble{max-width:78%;padding:8px 10px;border-radius:12px;margin:6px 0;white-space:pre-wrap;border:1px solid var(--line)}
     .user{background:var(--bubble-user);margin-left:auto}
     .bot{background:var(--bubble-bot)}
-
     .row{display:flex;gap:8px;align-items:center}
-
-    input,button,select,textarea{
-      background:var(--input);color:var(--ink);
-      border:1px solid var(--line);border-radius:8px;padding:8px
-    }
+    input,button,select,textarea{background:var(--input);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
     button{cursor:pointer;transition:.15s ease}
-    button.primary{
-      background:var(--accent);color:#073141;border:none
-    }
+    button.primary{background:var(--accent);color:#073141;border:none}
     button.primary:hover{background:var(--accent-deep)}
-    input:focus,select:focus,textarea:focus{
-      outline:none;border-color:var(--accent);
-      box-shadow:0 0 0 3px rgba(142,202,230,.35)
-    }
-
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(142,202,230,.35)}
     .muted{color:var(--muted)}
     .hr{height:1px;background:var(--line);margin:10px 0}
-
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .small{font-size:12px}
-
-    .badge{
-      border:1px solid var(--line);border-radius:999px;padding:2px 8px;
-      color:#476581;background:#eef6ff
-    }
-
+    .badge{border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:#476581;background:#eef6ff}
     footer{padding:10px 14px;color:#6b7785}
   </style>
-
-  
 </head>
 <body>
   <header>
@@ -118,46 +53,11 @@
         <div class="title">Avatar</div>
         <canvas id="avatarCanvas" width="800" height="800" style="width:100%;aspect-ratio:1;border-radius:10px;background:#0b1014;border:1px dashed #32424f;"></canvas>
         <div class="small muted" id="status">Idle</div>
-        <!-- <div class="hr"></div>
-        <div class="grid2">
-          <div>
-            <label class="small muted">Identity image (optional)</label>
-            <input type="file" id="idImage" accept="image/*" />
-          </div>
-          <div>
-            <label class="small muted">Base style</label>
-            <select id="baseStyle">
-              <option value="neutral">Neutral tutor</option>
-              <option value="casual">Casual</option>
-              <option value="formal">Formal</option>
-              <option value="sporty">Sporty</option>
-            </select>
-          </div>
-        </div>
-        <div class="hr"></div>
-        <div class="grid2">
-          <button id="prep" class="primary">Prepare next appearance</button>
-          <button id="swap">Swap now</button>
-        </div>
-        <div class="small muted" style="margin-top:6px;">Hint: generation runs at turn 10; swap occurs at turn 11.</div>
-        <div class="hr"></div>
-        <div class="grid2">
-          <button id="autoMode" class="">Auto 10→11</button>
-          このconditionを変えると、文脈を汲むかどうかが変わる。 -->
-          <select id="condition">
-            <option value="context">Context-adaptive</option>
-            <option value="static">Static (no change)</option>
-            <option value="random">Random change</option>
-          </select>
-        </div>
-        <!-- <div class="hr"></div>
-        <button id="export">Export session CSV</button>
-        <div id="apiPanel" class="row" style="margin-top:8px;gap:8px;">
-          <input id="apiKey" placeholder="OpenAI API Key (local only)" style="flex:1;min-width:260px" />
-          <label class="small">
-            <input type="checkbox" id="useOpenAI"> Use OpenAI for summary & image
-          </label>
-        </div> -->
+        <select id="condition" style="margin-top:8px">
+          <option value="context">Context-adaptive</option>
+          <option value="static">Static (no change)</option>
+          <option value="random">Random change</option>
+        </select>
       </div>
     </div>
 
@@ -170,14 +70,6 @@
           <input id="msg" placeholder="Type a message… (Enter to send)" style="flex:1" />
           <button id="send" class="primary">Send</button>
         </div>
-        <!-- <div class="hr"></div>
-        <div class="title">Context summary (auto every 10 turns)</div>
-        <textarea id="ctx" placeholder="Auto-generated summary will appear here."></textarea>
-        <div class="row" style="margin-top:6px;">
-          <button id="summarize">Summarize last 10 turns</button>
-          <button id="suggest">Suggest appearance</button>
-        </div>
-        <div class="small muted" id="suggestion"></div> -->
       </div>
     </div>
   </main>
@@ -206,14 +98,10 @@
     </div>
   </div>
 
-  <footer>
-    <!-- Minimal demo for ISAT: context-accumulated appearance adaptation (10→11 turn swap). -->
-  </footer>
+  <footer></footer>
 
   <script>
     // ===== Config =====
-    // const API_BASE = "http://localhost:8787/api";
-    // RenderのWeb Service URLに置換（末尾 /api まで）
     const PROD_API = 'https://chatbot-transform-1s.onrender.com/api';
     const API_BASE =
       (location.hostname.endsWith('onrender.com') || location.protocol === 'https:')
@@ -276,11 +164,11 @@
       return `Topics: ${topics.join(', ')}\nSentiment: ${inferSentiment(text)}\nStyle hint: ${hint}\n\n${text}`;
     }
 
-    // ===== Server calls =====
+    // ===== Server calls (JSON) =====
     async function chatWithServer(messages){
       const r = await fetch(`${API_BASE}/chat`, {
         method:'POST',
-        headers:{'Content-Type':'text/plain'},
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ messages })
       });
       if(!r.ok) throw new Error(await r.text());
@@ -290,58 +178,48 @@
     async function summarizeWithServer(last10Messages){
       const r = await fetch(`${API_BASE}/summarize`, {
         method:'POST',
-        headers:{'Content-Type':'text/plain'},
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ messages: last10Messages })
       });
       if(!r.ok) throw new Error(await r.text());
       const { topics, sentiment, hint } = await r.json();
       return `Topics: ${topics}\nSentiment: ${sentiment}\nStyle hint: ${hint}`;
     }
-    // 置き換え版：生成成功で即 <img id="avatar"> を差し替え
+    // 画像生成成功で state.current.img を更新し、canvas に再描画
     async function generateAvatarWithServer(hint){
       try {
         const r = await fetch(`${API_BASE}/generate-avatar`, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hint })
         });
         if (!r.ok) throw new Error(await r.text());
-
         const { dataUrl } = await r.json();
         if (!dataUrl) throw new Error('no image');
 
-        // 最新画像を状態に保存＆画面反映
         state.current.img = dataUrl;
-        // canvas に再描画
         drawAvatar();
-
         return dataUrl;
       } catch (e) {
         console.error('[generateAvatarWithServer] failed:', e);
-        // フォールバック：今の画像 or 初期画像を維持/返却
         const fallback = state.current.img || './img/FirstAvatar.png';
-        // canvas をフォールバックで再描画
         state.current.img = fallback;
         drawAvatar();
         return fallback;
       }
     }
 
-
     // ===== Core flow =====
     async function autoSummarizeAndPrepare(){
       const slice10 = state.messages.slice(-10).map(m => ({ role: m.role, text: m.text }));
       try {
-        // ① 最新10ターンを要約
         const summary = await summarizeWithServer(slice10);
         const ctx = el('ctx'); if (ctx) ctx.value = summary;
 
-        // ② 要約からヒント抽出
         let hint = 'neutral casual';
         const m = /Style hint:\s*(.*)/i.exec(summary || '');
         if (m && m[1]) hint = m[1].trim();
 
-        // ③ 画像生成して prepared にセット
         setStatus('Preparing appearance…');
         const img = (state.condition === 'static')
           ? state.current.img
@@ -351,7 +229,6 @@
         setStatus('Prepared. Ready to swap at next turn.');
       } catch(e){
         console.error('[autoSummarizeAndPrepare]', e);
-        // フォールバック：ヒューリスティックでhint→生成
         const text = last10Text();
         const ctx2 = el('ctx'); if (ctx2) ctx2.value = mockSummary(text);
         const hint = styleHintFromTopics(inferTopics(text));
@@ -369,7 +246,6 @@
       }
     }
 
-    // 互換：ボタン「Prepare」はこの関数を呼ぶ
     async function prepareAppearance(){ return autoSummarizeAndPrepare(); }
 
     function swapAppearance(){
@@ -386,15 +262,14 @@
       const cvs = el('avatarCanvas'); if(!cvs) return;
       const g = cvs.getContext('2d');
 
-      // 画像優先
       if (state.current?.img){
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = ()=>{ g.clearRect(0,0,cvs.width,cvs.height); g.drawImage(img,0,0,cvs.width,cvs.height); };
         img.src = state.current.img;
         return;
       }
 
-      // モック描画
       g.clearRect(0,0,cvs.width,cvs.height);
       g.fillStyle = '#10161c'; g.fillRect(0,0,cvs.width,cvs.height);
       g.fillStyle = '#c8d1d9'; g.beginPath(); g.arc(400,320,140,0,Math.PI*2); g.fill();
@@ -450,30 +325,23 @@
 
       renderBadges();
 
-      // 10ターン目：最新要約→準備（同期）
       if(state.turns % 10 === 0){ autoSummarizeAndPrepare(); }
-      // 11ターン目：自動でSwap（Auto ONの時）
       if(state.auto && (state.turns % 11 === 0)) swapAppearance();
 
       drawAvatar();
     }
 
     function boot(){
-      // Chat送信
       const send = el('send'), msg = el('msg');
       if(send){
         send.onclick = async ()=>{
           const v = msg.value.trim(); if(!v) return;
           msg.value = '';
-          // 1) まずユーザー発話を表示
           pushMessage('user', v);
 
           try{
-            // 2) 直近10ターンをサーバーに渡す
             const lastTurns = state.messages.slice(-10).map(m => ({ role: m.role, text: m.text }));
             const reply = await chatWithServer(lastTurns);
-
-            // 3) サーバーの返答を表示（60文字はサーバー側でも制御済み）
             pushMessage('bot', reply);
           }catch(e){
             console.error(e);
@@ -487,51 +355,8 @@
         });
       }
 
-      // 要約/サジェスト
-      const btnSum = el('summarize'); if(btnSum) btnSum.onclick = async ()=>{
-        const slice10 = state.messages.slice(-10).map(m => ({ role: m.role, text: m.text }));
-        try{ el('ctx').value = await summarizeWithServer(slice10); }
-        catch{ el('ctx').value = mockSummary(last10Text()); }
-      };
-      const btnSug = el('suggest'); if(btnSug) btnSug.onclick = ()=>{
-        const topics = inferTopics(el('ctx')?.value || last10Text());
-        const hint = styleHintFromTopics(topics);
-        const sug = el('suggestion'); if(sug) sug.textContent = `Suggested appearance: ${hint}`;
-      };
-
-      // Prepare/Swap
-      const prep = el('prep'); if(prep) prep.onclick = ()=>{ prepareAppearance(); };
-      const swap = el('swap'); if(swap) swap.onclick = swapAppearance;
-
-      // Auto/Condition
-      const auto = el('autoMode'); if(auto) auto.onclick = ()=>{
-        state.auto = !state.auto;
-        auto.classList.toggle('primary', state.auto);
-        auto.textContent = state.auto? 'Auto ON' : 'Auto 10→11';
-      };
-      const cond = el('condition'); if(cond) cond.onchange = (e)=>{ state.condition = e.target.value; };
-
-      // Export
-      const exp = el('export'); if(exp) exp.onclick = ()=>{
-        const head1 = 'turn,role,text,timestamp';
-        const rows1 = state.messages.map((m,i)=>`${i+1},${m.role},"${m.text.replaceAll('"','""')}",${m.t}`);
-        const head2 = '\n\nturn,hint,condition,q1,q2,q3,comment,timestamp';
-        const rows2 = state.surveys.map(s=>`${s.turn},${s.hint},${s.condition},${s.q1},${s.q2},${s.q3},"${(s.comment||'').replaceAll('"','""')}",${s.t}`);
-        const csv = head1+'\n'+rows1.join('\n')+head2+'\n'+rows2.join('\n');
-        const blob = new Blob([csv], {type:'text/csv'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href=url; a.download='session.csv'; a.click(); URL.revokeObjectURL(url);
-      };
-
-      // Survey
       bindSurvey();
-
-      // 初期描画
       renderBadges(); drawAvatar(); setStatus('Idle');
-
-      // <img id="avatar"> は使っていない（canvasに描画するため何もしない）
-      // const avatarEl = document.getElementById('avatar'); // 画像タグのid
-      // if (avatarEl && state.current.img) avatarEl.src = state.current.img;
     }
 
     if (document.readyState === 'loading'){
@@ -542,7 +367,3 @@
   </script>
 </body>
 </html>
-
-
-
-
