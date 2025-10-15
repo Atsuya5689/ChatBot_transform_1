@@ -7,46 +7,54 @@ import fetch from 'node-fetch';
 
 const app = express();
 
-/* ---------- CORS最優先（全レス/全エラーで必ず付与） ---------- */
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');               // ★これを最優先で常に付与
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
-
-/* ---------- ログ（到達確認） ---------- */
-app.use((req, _res, next) => {
-  console.log(`[IN] ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-/* ---------- セキュリティ/パーサ ---------- */
+/* ---------- security ---------- */
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(express.text({ type: 'text/plain', limit: '1mb' }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '1mb' })); // ← text/plain ワークアラウンド撤去
 
-/* ---------- ヘルス & 診断 ---------- */
+/* ---------- CORS (厳格 / 全パスで必ず返す) ---------- */
+const ALLOWED = (process.env.ALLOWED_ORIGIN || '').split(',')
+  .map(s => s.trim().replace(/\/+$/,'').toLowerCase())
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const raw = req.headers.origin || '';
+  const norm = raw.replace(/\/+$/,'').toLowerCase();
+  const ok = raw && ALLOWED.includes(norm);
+
+  if (ok) {
+    res.setHeader('Access-Control-Allow-Origin', raw);
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') {
+    if (ok) {
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      return res.sendStatus(204);
+    }
+    return res.sendStatus(403);
+  }
+  next();
+});
+
+/* ---------- health ---------- */
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
-app.get('/api/cors-test', (_req, res) => res.json({ ok: true, msg: 'cors-ok' }));
 
-/* ---------- レート制限（APIのみ） ---------- */
+/* ---------- rate limit (API) ---------- */
 app.use('/api/', rateLimit({ windowMs: 60_000, max: 30 }));
 
-/* ---------- OpenAIキー ---------- */
+/* ---------- keys ---------- */
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) console.warn('⚠️ OPENAI_API_KEY not set');
 
 /* ---------- summarize ---------- */
 app.post('/api/summarize', async (req, res) => {
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const msgs = (body.messages || []).slice(-10).map(m => `- ${m.role}: ${m.text}`).join('\n');
+    const msgs = (req.body?.messages || []).slice(-10)
+      .map(m => `- ${m.role}: ${m.text}`).join('\n');
 
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', Authorization:`Bearer ${OPENAI_API_KEY}` },
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${OPENAI_API_KEY}` },
       body: JSON.stringify({
         model:'gpt-4o-mini', temperature:0.4,
         messages:[
@@ -75,17 +83,18 @@ app.post('/api/summarize', async (req, res) => {
 /* ---------- generate avatar ---------- */
 app.post('/api/generate-avatar', async (req, res) => {
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const hint = body?.hint;
+    const hint = req.body?.hint;
     if (!hint || typeof hint !== 'string') return res.status(400).json({ error:'bad_request', detail:'hint must be a string' });
+
+    const headers = {
+      'Content-Type':'application/json',
+      Authorization:`Bearer ${OPENAI_API_KEY}`,
+      ...(process.env.ORG_ID ? { 'OpenAI-Organization': process.env.ORG_ID } : {})
+    };
 
     const r = await fetch('https://api.openai.com/v1/images/generations', {
       method:'POST',
-      headers: {
-        'Content-Type':'application/json',
-        Authorization:`Bearer ${OPENAI_API_KEY}`,
-        ...(process.env.ORG_ID ? { 'OpenAI-Organization': process.env.ORG_ID } : {})
-      },
+      headers,
       body: JSON.stringify({
         model:'gpt-image-1',
         prompt:
@@ -108,8 +117,7 @@ app.post('/api/generate-avatar', async (req, res) => {
 /* ---------- chat ---------- */
 app.post('/api/chat', async (req, res) => {
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const msgs = (body.messages || [])
+    const msgs = (req.body?.messages || [])
       .slice(-10)
       .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text }));
 
@@ -141,10 +149,10 @@ app.post('/api/chat', async (req, res) => {
   } catch (e) { res.status(500).json({ error:'server_error', detail:String(e) }); }
 });
 
-/* ---------- 最後の保険：エラーハンドラでもCORS付与 ---------- */
-app.use((err, req, res, _next) => {
+/* ---------- 404 & error ---------- */
+app.use((req, res) => res.status(404).json({ error:'not_found' }));
+app.use((err, _req, res, _next) => {
   console.error('[ERROR]', err);
-  res.setHeader('Access-Control-Allow-Origin', '*');
   res.status(500).json({ error:'server_error', detail:String(err) });
 });
 
@@ -152,4 +160,5 @@ app.use((err, req, res, _next) => {
 const PORT = Number(process.env.PORT || 8787);
 app.listen(PORT, () => {
   console.log(`✅ API listening on http://localhost:${PORT}`);
+  console.log(`   Allowed origins: ${ALLOWED.join(', ') || '(none)'}`);
 });
