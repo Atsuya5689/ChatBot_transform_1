@@ -9,6 +9,7 @@ const app = express();
 
 /* ---------------- security / basics ---------------- */
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(express.text({ type: 'text/plain', limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 
 /* ---------------- health ---------------- */
@@ -61,6 +62,7 @@ if (!OPENAI_API_KEY) {
 
 /* ---------------- summarize ---------------- */
 app.post('/api/summarize', async (req, res) => {
+  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   try {
     const msgs = (req.body?.messages || [])
       .slice(-10)
@@ -124,6 +126,7 @@ app.post('/api/summarize', async (req, res) => {
 
 /* ---------------- generate avatar ---------------- */
 app.post('/api/generate-avatar', async (req, res) => {
+  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   try {
     const hint = req.body?.hint;
     if (!hint || typeof hint !== 'string') {
@@ -166,6 +169,7 @@ app.post('/api/generate-avatar', async (req, res) => {
 
 /* ---------------- chat (60文字以内の雑談) ---------------- */
 app.post('/api/chat', async (req, res) => {
+  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   try {
     const msgs = (req.body?.messages || [])
       .slice(-10)
@@ -218,3 +222,4 @@ app.listen(PORT, () => {
   console.log(`✅ API listening on http://localhost:${PORT}`);
   console.log(`   Allowed origins: ${ALLOWED.join(', ') || '(none)'}`);
 });
+
