@@ -9,45 +9,22 @@ const app = express();
 
 /* ---------------- security / basics ---------------- */
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+// プリフライト回避のため text/plain も受け付ける
 app.use(express.text({ type: 'text/plain', limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
 
 /* ---------------- health ---------------- */
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-/* ---------------- CORS（全パス・手動・確実） ----------------
- * - .env: ALLOWED_ORIGIN="https://chatbot-transform-1.onrender.com"
- * - 末尾スラ無しで一致判定。許可Originには必ずACAOを付与
- * - OPTIONSは必ず204で必要ヘッダを返す
+/* ---------------- CORS（全許可・確実版） ----------------
+ * 認証(credential)を使っていない前提なので * でOK。
+ * OPTIONSは必ず204＋必要ヘッダを返す。
  */
-const ALLOWED = (process.env.ALLOWED_ORIGIN || 'http://localhost:5500')
-  .split(',')
-  .map(s => s.trim().replace(/\/+$/,'').toLowerCase())
-  .filter(Boolean);
-
-console.log('✅ Allowed origins:', ALLOWED.join(', ') || '(none)');
-
 app.use((req, res, next) => {
-  const raw = req.headers.origin || '';
-  const norm = raw.replace(/\/+$/,'').toLowerCase();
-  const isAllowed = !!raw && ALLOWED.includes(norm);
-
-  // 許可Originには常に付与
-  if (isAllowed) {
-    res.setHeader('Access-Control-Allow-Origin', raw); // そのまま返す
-    res.setHeader('Vary', 'Origin');
-  }
-
-  // プリフライトをここで完了
-  if (req.method === 'OPTIONS') {
-    if (isAllowed) {
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      return res.status(204).end();
-    }
-    return res.status(403).end();
-  }
-
+  res.setHeader('Access-Control-Allow-Origin', '*'); // ★重要
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
@@ -62,9 +39,10 @@ if (!OPENAI_API_KEY) {
 
 /* ---------------- summarize ---------------- */
 app.post('/api/summarize', async (req, res) => {
+  // text/plain の場合は文字列 → JSON に
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   try {
-    const msgs = (req.body?.messages || [])
+    const msgs = (body.messages || [])
       .slice(-10)
       .map((m) => `- ${m.role}: ${m.text}`)
       .join('\n');
@@ -128,7 +106,7 @@ app.post('/api/summarize', async (req, res) => {
 app.post('/api/generate-avatar', async (req, res) => {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   try {
-    const hint = req.body?.hint;
+    const hint = body?.hint;
     if (!hint || typeof hint !== 'string') {
       return res.status(400).json({ error: 'bad_request', detail: 'hint must be a string' });
     }
@@ -140,13 +118,15 @@ app.post('/api/generate-avatar', async (req, res) => {
 
     const payload = { model: 'gpt-image-1', prompt, size: '1024x1024' };
 
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    };
+    if (process.env.ORG_ID) headers['OpenAI-Organization'] = process.env.ORG_ID;
+
     const r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        'OpenAI-Organization': process.env.ORG_ID,
-      },
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -171,7 +151,7 @@ app.post('/api/generate-avatar', async (req, res) => {
 app.post('/api/chat', async (req, res) => {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
   try {
-    const msgs = (req.body?.messages || [])
+    const msgs = (body.messages || [])
       .slice(-10)
       .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text }));
 
@@ -220,6 +200,4 @@ app.post('/api/chat', async (req, res) => {
 const PORT = Number(process.env.PORT || 8787);
 app.listen(PORT, () => {
   console.log(`✅ API listening on http://localhost:${PORT}`);
-  console.log(`   Allowed origins: ${ALLOWED.join(', ') || '(none)'}`);
 });
-
