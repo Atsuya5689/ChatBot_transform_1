@@ -1,7 +1,6 @@
 // server/server.js
 import 'dotenv/config';
 import express from 'express';
-// import cors from 'cors'; // ←手動CORSに切り替えたので未使用
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import fetch from 'node-fetch';
@@ -12,56 +11,52 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(express.json({ limit: '1mb' }));
 
-/* ---------------- health (CORSより前に置く) ---------------- */
+/* ---------------- health ---------------- */
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-/* ---------------- CORS（手動・確実版） ----------------
- * - ALLOWED_ORIGIN（カンマ区切り）とOriginを厳密一致で比較（末尾/は無視）
- * - /api への OPTIONS は必ず204 + 必要ヘッダを返す
- * - 本リクエストでも許可Originなら必ず ACAO を付与
- * - 資格情報は使わない（Access-Control-Allow-Credentials 未付与）
- * --------------------------------------------------- */
+/* ---------------- CORS（全パス・手動・確実） ----------------
+ * - .env: ALLOWED_ORIGIN="https://chatbot-transform-1.onrender.com"
+ * - 末尾スラ無しで一致判定。許可Originには必ずACAOを付与
+ * - OPTIONSは必ず204で必要ヘッダを返す
+ */
 const ALLOWED = (process.env.ALLOWED_ORIGIN || 'http://localhost:5500')
   .split(',')
   .map(s => s.trim().replace(/\/+$/,'').toLowerCase())
   .filter(Boolean);
 
-console.log(' Allowed origins:', ALLOWED.join(', ') || '(none)');
+console.log('✅ Allowed origins:', ALLOWED.join(', ') || '(none)');
 
-app.use('/api', (req, res, next) => {
-  const raw = req.headers.origin || '';                 // 例: https://chatbot-transform-1.onrender.com
+app.use((req, res, next) => {
+  const raw = req.headers.origin || '';
   const norm = raw.replace(/\/+$/,'').toLowerCase();
   const isAllowed = !!raw && ALLOWED.includes(norm);
 
-  // Preflight (OPTIONS)
+  // 許可Originには常に付与
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', raw); // そのまま返す
+    res.setHeader('Vary', 'Origin');
+  }
+
+  // プリフライトをここで完了
   if (req.method === 'OPTIONS') {
     if (isAllowed) {
-      res.setHeader('Access-Control-Allow-Origin', raw); // そのまま返す（大文字小文字も維持）
-      res.setHeader('Vary', 'Origin');
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      // res.setHeader('Access-Control-Max-Age', '600'); // 任意: プリフライト結果のキャッシュ
       return res.status(204).end();
     }
-    // 許可外のOriginのプリフライトは即NG
     return res.status(403).end();
   }
 
-  // 本リクエスト（GET/POSTなど）
-  if (isAllowed) {
-    res.setHeader('Access-Control-Allow-Origin', raw);
-    res.setHeader('Vary', 'Origin');
-  }
-  return next();
+  next();
 });
 
-/* ---------------- rate limit ---------------- */
+/* ---------------- rate limit（APIだけ） ---------------- */
 app.use('/api/', rateLimit({ windowMs: 60_000, max: 30 }));
 
 /* ---------------- API keys ---------------- */
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
-  console.warn('  OPENAI_API_KEY is not set. Set it in Render Web Service env.');
+  console.warn('⚠️  OPENAI_API_KEY is not set. Set it in Render Web Service env.');
 }
 
 /* ---------------- summarize ---------------- */
@@ -220,6 +215,6 @@ app.post('/api/chat', async (req, res) => {
 /* ---------------- start ---------------- */
 const PORT = Number(process.env.PORT || 8787);
 app.listen(PORT, () => {
-  console.log(` API listening on http://localhost:${PORT}`);
+  console.log(`✅ API listening on http://localhost:${PORT}`);
   console.log(`   Allowed origins: ${ALLOWED.join(', ') || '(none)'}`);
 });
